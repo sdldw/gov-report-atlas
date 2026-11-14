@@ -36,6 +36,7 @@ COLUMNS = [
     "url", "path", "sha256", "bytes", "status", "http_code", "fetched_at",
 ]
 YEAR_RE = re.compile(r"(20\d{2})\s*年")
+YEAR_IN_URL = re.compile(r"/(20\d{2})[/_\-]")
 PAGE_RE = re.compile(r"(index[_\-]\d+\.(?:s?html?))|([?&]page=\d+)", re.IGNORECASE)
 DISCLOSURE_PATHS = ["/zfxxgk/zfgzbg/", "/zwgk/zfgzbg/", "/xxgk/zfgzbg/", "/zfgzbg/"]
 MIN_YEAR, MAX_YEAR = 2015, 2026
@@ -45,11 +46,14 @@ def years_from(html: bytes, base_url: str) -> dict[int, str]:
     out: dict[int, str] = {}
     for text, url in find_report_links(html, base_url):
         match = YEAR_RE.search(text)
-        if not match:
+        year = int(match.group(1)) if match else None
+        if year is None:
+            # many portals put the year in the path, not in the anchor text
+            fallback = YEAR_IN_URL.search(url)
+            year = int(fallback.group(1)) if fallback else None
+        if year is None or not MIN_YEAR <= year <= MAX_YEAR:
             continue
-        year = int(match.group(1))
-        if MIN_YEAR <= year <= MAX_YEAR:
-            out.setdefault(year, url)
+        out.setdefault(year, url)
     return out
 
 
