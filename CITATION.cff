@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "如果本仓库的代码或整理后的数据对你有帮助，请按以下格式引用。"
+title: "「新质生产力」在省级政府工作报告中的扩散与转译（2015—2026）"
+abstract: >-
+  基于 14 个省级行政区 2015—2026 年 129 份政府工作报告（约 247 万字、6.7 万句）的文本计量研究。
+  测量「新质生产力」这一政策概念的扩散形态与转译结构：概念在一年内覆盖 92% 的样本省份，
+  此后注意力强度由每份 1.69 次升至 4.21 次；其绑定对象由「产业」向「平台」「人才」位移，
+  而至少绑定一项具体政策工具的比例稳定在 0.63—0.73。
+authors:
+  - family-names: "待填（姓）"
+    given-names: "待填（名）"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+    alias: "sdldw"
+repository-code: "https://github.com/sdldw/gov-report-atlas"
+url: "https://github.com/sdldw/gov-report-atlas"
+license: MIT
+version: "0.1.0"
+date-released: "2026-11-14"
+keywords:
+  - 政策文本
+  - 政府工作报告
+  - 新质生产力
+  - 概念扩散
+  - 政策转译
+  - 文本计量
+  - computational social science
