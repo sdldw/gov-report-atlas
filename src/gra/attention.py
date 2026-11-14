@@ -54,6 +54,12 @@ def split_sentences(text: str, min_len: int = 12) -> list[str]:
     return [s.strip() for s in SENT_SPLIT.split(text) if len(s.strip()) >= min_len]
 
 
+def shingles(text: str, n: int = 3) -> set[str]:
+    """Character n-grams, whitespace stripped. Used for near-duplicate checks."""
+    chars = re.sub(r"\s+", "", text)
+    return {chars[i:i + n] for i in range(max(0, len(chars) - n + 1))}
+
+
 def simhash(text: str, bits: int = 64) -> int:
     """Character 3-gram simhash; stable across runs (blake2b, not hash())."""
     grams = [text[i:i + 3] for i in range(max(0, len(text) - 2))]

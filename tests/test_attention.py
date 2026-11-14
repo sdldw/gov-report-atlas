@@ -5,6 +5,7 @@ from gra.attention import (
     copying_rate,
     count_concept,
     hamming,
+    shingles,
     simhash,
     split_sentences,
 )
@@ -15,6 +16,12 @@ def test_count_concept_does_not_double_count_overlapping_variants():
     assert count_concept("新质生产力发展", variants) == 1
     assert count_concept("新质生产力和新质生产力发展", variants) == 2
     assert count_concept("本句没有该词", variants) == 0
+
+
+def test_shingles_are_character_ngrams():
+    assert shingles("abcde", 3) == {"abc", "bcd", "cde"}
+    assert shingles("ab", 3) == set()
+    assert shingles("a b c", 2) >= {"ab", "bc"}
 
 
 def test_cjk_count_ignores_punctuation_and_latin():
