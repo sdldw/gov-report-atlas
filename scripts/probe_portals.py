@@ -1,15 +1,12 @@
 """Probe provincial portals for a usable "government work report" hub.
 
-Read-only reconnaissance: at most two GETs per province (https, then http
-fallback). No crawling, no recursion. The result decides the whole crawl
-architecture:
-
-  * if most provinces expose a hub page listing their cities -> ~32 adapters
-  * if not -> 364 portal-level adapters, a much bigger job
+Read-only reconnaissance. Depth 1 means "look at the homepage only"; depth 2
+means "follow nav links whose text looks like a disclosure section, then look
+again". No crawling beyond that, no recursion into article pages.
 
 Usage:
     python scripts/probe_portals.py
-    python scripts/probe_portals.py --rate 2.0 --timeout 20
+    python scripts/probe_portals.py --depth 1 --rate 1.5
 """
 from __future__ import annotations
 
@@ -18,7 +15,7 @@ import csv
 import re
 import time
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = ROOT / "config" / "portals_seed.yaml"
@@ -27,8 +24,12 @@ OUT_DIR = ROOT / "data" / "probe"
 KEYWORD = "政府工作报告"
 UA = "gov-report-atlas/0.1 (academic course project; contact via repository)"
 CHARSET_RE = re.compile(rb'charset\s*=\s*["\']?\s*([\w-]+)', re.IGNORECASE)
+NAV_RE = re.compile(
+    r"(政务公开|信息公开|政府信息公开|工作报告|政府工作报告|政策文件|规划计划|政策解读|政府会议)"
+)
+HREF_RE = re.compile(r"(zfxxgk|gongkai|xxgk|zfgzbg|gbg|report|ghjh|zwgk)", re.IGNORECASE)
 COLUMNS = ["code", "name", "domain", "scheme", "status", "title_ok",
-           "n_report_links", "sample_link", "error"]
+           "n_report_links", "pages_fetched", "sample_link", "error"]
 
 
 def _decode(raw: bytes) -> str:
@@ -67,6 +68,33 @@ def find_report_links(html: bytes, base_url: str) -> list[tuple[str, str]]:
     return out
 
 
+def nav_links(html: bytes, base_url: str, limit: int = 8) -> list[str]:
+    """Candidate disclosure-section pages, same host only."""
+    from lxml import html as LH
+
+    doc = LH.fromstring(_decode(html))
+    host = urlparse(base_url).netloc
+    out: list[str] = []
+    seen: set[str] = set()
+    for anchor in doc.xpath("//a[@href]"):
+        text = re.sub(r"\s+", "", "".join(anchor.itertext()))
+        href = (anchor.get("href") or "").strip()
+        if not href or href.lower().startswith(("javascript:", "#", "mailto:")):
+            continue
+        if KEYWORD in text:
+            continue  # already a report link, handled by find_report_links
+        if not (NAV_RE.search(text) or HREF_RE.search(href)):
+            continue
+        absolute = urljoin(base_url, href)
+        if urlparse(absolute).netloc != host or absolute in seen:
+            continue
+        seen.add(absolute)
+        out.append(absolute)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def page_title(html: bytes) -> str:
     match = re.search(rb"<title[^>]*>(.*?)</title>", html, re.DOTALL | re.IGNORECASE)
     if not match:
@@ -87,7 +115,35 @@ def short_name(name: str) -> str:
     return name
 
 
-def probe_one(session, row: dict, timeout: int) -> dict:
+def collect(session, homepage, timeout: int, depth: int, max_pages: int):
+    """Return (report_links, pages_fetched) starting from an already-fetched homepage."""
+    links = find_report_links(homepage.content, homepage.url)
+    pages = 1
+    if links or depth <= 1:
+        return links, pages
+
+    for nav in nav_links(homepage.content, homepage.url, limit=max_pages):
+        if pages > max_pages:
+            break
+        try:
+            sub = session.get(nav, timeout=timeout)
+            pages += 1
+        except Exception:  # noqa: BLE001
+            continue
+        if sub.status_code >= 400:
+            continue
+        links.extend(find_report_links(sub.content, sub.url))
+
+    deduped: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for text, url in links:
+        if url not in seen:
+            seen.add(url)
+            deduped.append((text, url))
+    return deduped, pages
+
+
+def probe_one(session, row: dict, timeout: int, depth: int, max_pages: int) -> dict:
     record = {k: "" for k in COLUMNS}
     record.update(code=row["code"], name=row["name"], domain=row["domain"])
     last_error = ""
@@ -103,10 +159,11 @@ def probe_one(session, row: dict, timeout: int) -> dict:
             last_error = f"HTTP {resp.status_code}"
             continue
         title = page_title(resp.content)
-        links = find_report_links(resp.content, resp.url)
+        links, pages = collect(session, resp, timeout, depth, max_pages)
         record.update(
             title_ok=str(short_name(row["name"]) in title).lower(),
             n_report_links=str(len(links)),
+            pages_fetched=str(pages),
             sample_link=links[0][1] if links else "",
         )
         return record
@@ -121,21 +178,27 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--rate", type=float, default=1.5)
     ap.add_argument("--timeout", type=int, default=20)
+    ap.add_argument("--depth", type=int, default=2, choices=[1, 2])
+    ap.add_argument("--max-pages", type=int, default=6, help="subpages per site at depth 2")
     ap.add_argument("--out", type=Path, default=OUT_DIR / "portals.csv")
     args = ap.parse_args()
 
     seed = yaml.safe_load(SEED.read_text(encoding="utf-8"))["portals"]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
-    session.headers["User-Agent"] = UA
+    session.headers.update({
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    })
 
     records = []
     for row in seed:
-        record = probe_one(session, row, args.timeout)
+        record = probe_one(session, row, args.timeout, args.depth, args.max_pages)
         records.append(record)
         print(f"{record['code']} {record['name']:<8} {record['scheme'] or '-':<5} "
-              f"{record['status'] or '-':<4} links={record['n_report_links'] or '-':<3} "
-              f"{record['error']}")
+              f"{record['status'] or '-':<4} pages={record['pages_fetched'] or '-':<2} "
+              f"links={record['n_report_links'] or '-':<3} {record['error']}")
         time.sleep(args.rate)
 
     with open(args.out, "w", newline="", encoding="utf-8") as fh:
