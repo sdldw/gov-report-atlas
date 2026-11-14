@@ -19,3 +19,6 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+
+# local scratch (browser temp, renders)
+.tmp/
