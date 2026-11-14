@@ -1,0 +1,30 @@
+[project]
+name = "gov-report-atlas"
+version = "0.1.0"
+description = "Diffusion and translation of policy concepts across Chinese government work reports"
+requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31",
+  "lxml>=5.0",
+  "pymupdf>=1.24",
+  "pandas>=2.1",
+  "pyyaml>=6.0",
+  "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.3"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

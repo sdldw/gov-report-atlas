@@ -1,0 +1,15 @@
+# data: never commit raw PDFs
+data/raw/
+data/interim/
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+
+# logs & caches
+logs/
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+.ipynb_checkpoints/
+.DS_Store
+*.part

@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# keep binaries untouched
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.zip binary

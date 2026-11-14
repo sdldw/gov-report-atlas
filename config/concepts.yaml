@@ -1,0 +1,40 @@
+# 概念词典 v0.1
+# 规则：seeds 是核心词（命中即计数）；variants 是同义/异体写法，合并计数。
+# origin 是中央首次提出的时间点，用于算"先导性"（早于它出现的地区）。
+# 改动必须升 version，并重跑敏感性分析（见 docs/concept_dict.md）。
+
+version: "0.1"
+
+concepts:
+  新质生产力:
+    variants: ["新质生产力", "新质生产力发展"]
+    origin: "2023-09"
+    level: core
+  人工智能加:
+    variants: ["人工智能+", "人工智能＋", "AI+", "人工智能加"]
+    origin: "2024-03"
+    level: core
+  全国统一大市场:
+    variants: ["全国统一大市场", "统一大市场"]
+    origin: "2022-04"
+    level: core
+  银发经济:
+    variants: ["银发经济", "老龄产业"]
+    origin: "2024-01"
+    level: core
+  双碳:
+    variants: ["碳中和", "碳达峰", "双碳"]
+    origin: "2020-09"
+    level: core
+  共同富裕:
+    variants: ["共同富裕", "共富"]
+    origin: "2021-08"
+    level: core
+  数据要素:
+    variants: ["数据要素", "数据要素市场化"]
+    origin: "2019-10"
+    level: core
+  低空经济:
+    variants: ["低空经济"]
+    origin: "2024-03"
+    level: core

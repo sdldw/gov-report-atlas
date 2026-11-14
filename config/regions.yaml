@@ -1,0 +1,27 @@
+# 样本框定义。锁定后不要回头改，否则构成"用结果挑样本"。
+#
+# 名单正文在 data/regions.csv（由 scripts/build_regions.py 校验生成）：
+#   code, name, level, province, portal_url, adapter
+# level: province / prefecture（中央文档不入 regions.csv，单独列在 manifest）
+
+as_of: "2026-11-14"
+years: [2023, 2024, 2025, 2026]
+
+goal:
+  central: 5          # 建议、纲要、政府工作报告
+  province: 124       # 31 x 4 年
+  prefecture: 1332    # 333 x 4 年
+
+doc_type:
+  - central_file      # 中央文件：建议、纲要
+  - work_report       # 各级政府工作报告
+
+notes:
+  - 直辖市（京、津、沪、渝）无地级行政区，省级文本即"城市"文本，不另采区级，故其无 prefecture 行。
+  - 港澳台不在样本框内。
+  - 三沙市等极少数地区可能无公开报告；缺失写入 manifest 的 failed 状态，不从样本框剔除。
+  - 省级"十五五"规划纲要若未发布，用当年政府工作报告替代，替代规则写入报告。
+
+seed: "data/regions_seed.csv"
+extra: "data/prefectures_raw.csv"
+output: "data/regions.csv"
