@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_DIR = ROOT / "data" / "interim" / "text"
-OUT = ROOT / "data" / "processed" / "translation.csv"
+OUT_DIR = ROOT / "data" / "processed"
 
 CONCEPT = "新质生产力"
 
@@ -118,12 +118,13 @@ def main() -> None:
             **{f"share_{k}": round(v, 4) for k, v in shares.items()},
         })
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT, "w", newline="", encoding="utf-8") as fh:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / f"translation_{args.mode}.csv"
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else ["year"])
         writer.writeheader()
         writer.writerows(rows)
-    print(f"\nwrote {OUT}")
+    print(f"\nwrote {out}")
 
     if first_year:
         print("\nfirst mention year by province:")

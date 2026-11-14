@@ -22,7 +22,7 @@ from matplotlib import font_manager  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "data" / "processed" / "panel.csv"
-TRANSLATION = ROOT / "data" / "processed" / "translation.csv"
+TRANSLATION = ROOT / "data" / "processed" / "translation_sentence.csv"
 OUT_DIR = ROOT / "docs" / "figs"
 
 PRIMARY = "新质生产力"
