@@ -22,7 +22,7 @@
 ![转译结构](docs/figs/fig2_translation.png)
 ![扩散曲线](docs/figs/fig3_diffusion.png)
 
-完整报告见 [`docs/report.md`](docs/report.md)。
+完整报告见 [`docs/report.md`](docs/report.md)，答辩准备见 [`docs/defense.md`](docs/defense.md)。
 
 ## 快速开始
 
