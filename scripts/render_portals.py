@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import time
 from pathlib import Path
 
@@ -25,6 +26,7 @@ OUT = ROOT / "data" / "probe" / "rendered.csv"
 
 COLUMNS = ["code", "name", "home", "archive", "n_links", "n_years", "years", "error"]
 MAX_NAV = 6
+DUMP_DIR = ROOT / "data" / "probe" / "dump"
 
 
 def render(page, url: str, timeout: int) -> bytes:
@@ -58,6 +60,7 @@ def main() -> None:
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--timeout", type=int, default=30000)
     ap.add_argument("--merge", action="store_true", help="write archive URLs into portals.csv")
+    ap.add_argument("--dump", action="store_true", help="save rendered html for inspection")
     args = ap.parse_args()
 
     seed = yaml.safe_load(SEED.read_text(encoding="utf-8"))["portals"]
@@ -84,6 +87,9 @@ def main() -> None:
             try:
                 html = render(page, home, args.timeout)
                 record["home"] = page.url
+                if args.dump:
+                    DUMP_DIR.mkdir(parents=True, exist_ok=True)
+                    (DUMP_DIR / f"{item['code']}_home.html").write_bytes(html)
                 links = find_report_links(html, page.url)
                 if not links:
                     for nav in nav_links(html, page.url, limit=MAX_NAV):
@@ -91,6 +97,10 @@ def main() -> None:
                             sub = render(page, nav, args.timeout)
                         except Exception:  # noqa: BLE001
                             continue
+                        if args.dump:
+                            DUMP_DIR.mkdir(parents=True, exist_ok=True)
+                            safe = re.sub(r"[^\w]+", "_", nav)[:80]
+                            (DUMP_DIR / f"{item['code']}_nav_{safe}.html").write_bytes(sub)
                         links.extend(find_report_links(sub, page.url))
                         if len(years_from(links)) >= 5:
                             break
