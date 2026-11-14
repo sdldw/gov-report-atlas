@@ -16,9 +16,11 @@ RAW = ROOT / "data" / "raw"
 OUT = ROOT / "data" / "interim" / "text"
 LOGS = ROOT / "logs"
 
-CHARSET_RE = re.compile(rb'charset\s*=\s*["\']?\s*([\w-]+)', re.I)
+CHARSET_RE = re.compile(rb'charset\s*=\s*["\']?\s*([\w-]+)', re.IGNORECASE)
 CHROME = ("script", "style", "nav", "header", "footer", "noscript", "form", "iframe")
 MIN_BLOCK = 20
+
+LOG = logging.getLogger(__name__)
 
 
 def decode(raw: bytes) -> str:
@@ -92,7 +94,7 @@ def run() -> None:
         handlers=[logging.FileHandler(LOGS / "parse.log", encoding="utf-8")],
     )
     files = [p for p in sorted(RAW.iterdir()) if p.suffix.lower() in {".html", ".pdf", ".bin"}]
-    logging.info("parsing %d files", len(files))
+    LOG.info("parsing %d files", len(files))
     empty = 0
     for path in files:
         target = OUT / f"{path.stem}.json"
@@ -100,14 +102,14 @@ def run() -> None:
             continue
         try:
             record = parse_one(path)
-        except Exception as exc:  # noqa: BLE001
-            logging.exception("parse failed for %s: %s", path.name, exc)
+        except Exception:
+            LOG.exception("parse failed for %s", path.name)
             continue
         if record["n_chars"] < 200:
             empty += 1
-            logging.warning("short text (%d chars): %s", record["n_chars"], path.name)
+            LOG.warning("short text (%d chars): %s", record["n_chars"], path.name)
         target.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
-    logging.info("done, short=%d", empty)
+    LOG.info("done, short=%d", empty)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,8 @@ COLUMNS = [
     "url", "path", "sha256", "bytes", "status", "http_code", "fetched_at",
 ]
 
+LOG = logging.getLogger(__name__)
+
 
 def setup_logging() -> None:
     LOGS.mkdir(parents=True, exist_ok=True)
@@ -81,12 +83,11 @@ def download(session: requests.Session, url: str, dest_stem: Path,
             )
             tmp = dest.with_suffix(dest.suffix + ".part")
             with open(tmp, "wb") as fh:
-                for chunk in resp.iter_content(1 << 16):
-                    fh.write(chunk)
+                fh.writelines(resp.iter_content(1 << 16))
             tmp.replace(dest)
             return True, last_code, dest
         except Exception as exc:  # noqa: BLE001
-            logging.warning("attempt %d/%d failed (%s): %s", attempt, retries, url, exc)
+            LOG.warning("attempt %d/%d failed (%s): %s", attempt, retries, url, exc)
             time.sleep(min(2 ** attempt, 30) + random.random())
     return False, last_code, None
 
@@ -103,7 +104,7 @@ def run(rate: float = 1.5, limit: int = 0, retries: int = 3) -> None:
     todo = [r for r in rows if not (r.get("status") == "ok" and r.get("sha256"))]
     if limit:
         todo = todo[:limit]
-    logging.info("manifest=%d pending=%d", len(rows), len(todo))
+    LOG.info("manifest=%d pending=%d", len(rows), len(todo))
 
     ok = failed = 0
     for row in todo:
@@ -128,12 +129,12 @@ def run(rate: float = 1.5, limit: int = 0, retries: int = 3) -> None:
         else:
             row["status"] = "failed"
             failed += 1
-            logging.error("failed %s -> %s", row["doc_id"], row["url"])
+            LOG.error("failed %s -> %s", row["doc_id"], row["url"])
         write_manifest(rows)
         time.sleep(rate + random.random() * 0.5)
 
     write_manifest(rows)
-    logging.info("done ok=%d failed=%d", ok, failed)
+    LOG.info("done ok=%d failed=%d", ok, failed)
 
 
 def main() -> None:

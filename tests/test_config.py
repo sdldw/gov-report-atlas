@@ -30,7 +30,8 @@ def test_concepts_yaml_shape():
 
 
 def test_region_frame_is_locked():
-    rows = list(csv.DictReader(open(ROOT / "data" / "regions.csv", encoding="utf-8")))
+    with open(ROOT / "data" / "regions.csv", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
     provinces = [r for r in rows if r["level"] == "province"]
     prefectures = [r for r in rows if r["level"] == "prefecture"]
     assert len(provinces) == 31, "province frame changed"

@@ -64,7 +64,7 @@ def simhash(text: str, bits: int = 64) -> int:
 
 
 def hamming(a: int, b: int) -> int:
-    return bin(a ^ b).count("1")
+    return (a ^ b).bit_count()
 
 
 class SimhashIndex:

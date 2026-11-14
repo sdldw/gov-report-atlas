@@ -26,7 +26,7 @@ OUT_DIR = ROOT / "data" / "probe"
 
 KEYWORD = "政府工作报告"
 UA = "gov-report-atlas/0.1 (academic course project; contact via repository)"
-CHARSET_RE = re.compile(rb'charset\s*=\s*["\']?\s*([\w-]+)', re.I)
+CHARSET_RE = re.compile(rb'charset\s*=\s*["\']?\s*([\w-]+)', re.IGNORECASE)
 COLUMNS = ["code", "name", "domain", "scheme", "status", "title_ok",
            "n_report_links", "sample_link", "error"]
 
@@ -68,7 +68,7 @@ def find_report_links(html: bytes, base_url: str) -> list[tuple[str, str]]:
 
 
 def page_title(html: bytes) -> str:
-    match = re.search(rb"<title[^>]*>(.*?)</title>", html, re.S | re.I)
+    match = re.search(rb"<title[^>]*>(.*?)</title>", html, re.DOTALL | re.IGNORECASE)
     if not match:
         return ""
     raw = match.group(1)
@@ -87,7 +87,7 @@ def short_name(name: str) -> str:
     return name
 
 
-def probe_one(session: "requests.Session", row: dict, timeout: int) -> dict:  # noqa: F821
+def probe_one(session, row: dict, timeout: int) -> dict:
     record = {k: "" for k in COLUMNS}
     record.update(code=row["code"], name=row["name"], domain=row["domain"])
     last_error = ""
