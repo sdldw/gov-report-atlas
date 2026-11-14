@@ -1,5 +1,7 @@
 # gov-report-atlas
 
+[![ci](https://github.com/sdldw/gov-report-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/sdldw/gov-report-atlas/actions/workflows/ci.yml)
+
 > 「新质生产力」在省级政府工作报告中的扩散与转译（2015—2026）
 
 采集 14 个省级行政区 2015–2026 年的 **129 份政府工作报告**（约 247 万字、6.7 万句），
