@@ -117,6 +117,7 @@ def build_panel() -> None:
         fh.write(",".join(header) + "\n")
         for row in rows:
             fh.write(",".join(str(row.get(k, "")) for k in header) + "\n")
+    print(f"wrote {target} rows={len(rows)}")
 
 
 def main() -> None:

@@ -91,7 +91,10 @@ def run() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[logging.FileHandler(LOGS / "parse.log", encoding="utf-8")],
+        handlers=[
+            logging.FileHandler(LOGS / "parse.log", encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
     )
     files = [p for p in sorted(RAW.iterdir()) if p.suffix.lower() in {".html", ".pdf", ".bin"}]
     LOG.info("parsing %d files", len(files))
