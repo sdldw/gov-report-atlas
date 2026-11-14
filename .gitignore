@@ -22,3 +22,4 @@ build/
 
 # local scratch (browser temp, renders)
 .tmp/
+.playwright/
