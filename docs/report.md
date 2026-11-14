@@ -25,6 +25,16 @@
 
 贡献有三：其一，给出一个可复现的省级政策文本语料构建流程；其二，用句级共现把「转译」操作化为可测量的指标；其三，通过参数敏感性检验说明该类指标的适用边界——这一点在同类研究中常被忽略。
 
+### 1.1 与既有研究的对话
+
+**政策扩散**。自 Walker（1969）以来，这一支文献以「采纳与否、何时采纳」为核心指标，Berry 与 Berry（2014）将其归纳为内部决定模型与扩散模型两类解释。中国场景下的研究更强调纵向干预：中央通过试点、信号与考核推动地方跟进，地方间横向学习相对次要（Zhu，2014）。这与本文观察到的「零时滞」相互印证——一年内 92% 的省份提及，更像是信号传导而非自发学习。但既有研究止步于「采纳」，本文进一步追问采纳之后的强度与结构。
+
+**注意力分配**。Jones 与 Baumgartner（2005）指出，政府处理议题的能力受注意力约束，一个议题的上升往往以另一个议题的下降为代价。本文 4.3 节的「挤占」正是这一命题在文本层面的体现。
+
+**文本作为数据**。Grimmer 与 Stewart（2013）提醒，自动内容分析的有效性取决于「概念效度」——指标是否真的对应理论概念，而非仅仅对应词语。本文 3.3 节记录的口径翻转（窗口法得出「空心化」，句级法得出「稳定」）正是对这一警告的具体回应。
+
+**本文的增量**在于：把「转译」从一个描述性说法，变成可由「工具词共现率 + 中央文本片段重合率」两个维度测量的对象，并给出两种测量在同一批语料上的分歧。
+
 ---
 
 ## 2 数据
@@ -226,6 +236,22 @@ $$\text{share} = \frac{\text{概念出现次数}}{\text{正文汉字总数}} \ti
 
 ---
 
+## 参考文献
+
+Berry, F. S., & Berry, W. D. (2014). Innovation and Diffusion Models in Policy Research. In P. A. Sabatier & C. M. Weible (Eds.), *Theories of the Policy Process* (3rd ed.). Westview Press.
+
+Grimmer, J., & Stewart, B. M. (2013). Text as Data: The Promise and Pitfalls of Automatic Content Analysis Methods for Political Texts. *Political Analysis*, 21(3), 267–297.
+
+Jones, B. D., & Baumgartner, F. R. (2005). *The Politics of Attention: How Government Prioritizes Problems*. University of Chicago Press.
+
+Walker, J. L. (1969). The Diffusion of Innovations among the American States. *American Political Science Review*, 63(3), 880–899.
+
+Zhu, X. (2014). Mandate versus Championship: Vertical Government Intervention and Diffusion of Innovation in Public Services in Authoritarian China. *Public Management Review*, 16(1), 117–139.
+
+周雪光（2017）.《中国国家治理的制度逻辑：一个组织学研究》. 生活·读书·新知三联书店.
+
+---
+
 ## 附录：复现
 
 ```bash
@@ -235,7 +261,8 @@ python -m gra.fetch                # 下载
 python -m gra.parse                # 解析
 python -m gra.attention            # 注意力面板
 python scripts/translation.py      # 句级共现
-python scripts/figures.py          # 三张图
+python scripts/copyrate.py         # 与中央报告的复制率（需先将三份中央报告放入 data/raw/central/）
+python scripts/figures.py          # 四张图
 ```
 
-原始文本不随仓库分发，`manifest.csv` 记录每份文档的来源与 SHA256。
+原始文本不随仓库分发，`manifest.csv` 记录每份文档的来源与 SHA256；中央报告同样不随仓库分发，需自行下载至 `data/raw/central/`，文件名含四位年份。
