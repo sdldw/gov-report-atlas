@@ -1,7 +1,7 @@
 code,name,province,home,method,n_links,n_years,years,sample_link
 130100,石家庄市,河北省,https://www.sjz.gov.cn/,nav,1,0,,https://www.sjz.gov.cn/columns/a42a569b-80e5-43b6-bd7a-f0d09c01f221/index.html
 130200,唐山市,河北省,,-,,,,
-130300,秦皇岛市,河北省,,-,,,,
+130300,秦皇岛市,河北省,https://www.qinhuangdao.gov.cn/,-,,,,
 130400,邯郸市,河北省,https://www.hd.gov.cn/,-,,,,
 130500,邢台市,河北省,http://www.xingtai.gov.cn/,path/zwgk/zfgzbg/,18,16,2010|2012|2013|2014|2015|2016|2017|2018|2019|2020|2021|2022|2023|2024|2025|2026,http://www.xingtai.gov.cn/zwgk/zfgzbg/
 130600,保定市,河北省,https://www.baoding.gov.cn/,-,,,,
@@ -15,7 +15,7 @@ code,name,province,home,method,n_links,n_years,years,sample_link
 140300,阳泉市,山西省,,-,,,,
 140400,长治市,山西省,,-,,,,
 140500,晋城市,山西省,,-,,,,
-140600,朔州市,山西省,http://www.shuozhou.gov.cn/,-,,,,
+140600,朔州市,山西省,http://www.shuozhou.gov.cn/,nav,20,20,2005|2006|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019|2021|2022|2023|2024|2025|2026,http://www.shuozhou.gov.cn/xxgk/zfgb/2026zfgb/20261/2024555511/202602/t20260228_764140.shtml
 140700,晋中市,山西省,,-,,,,
 140800,运城市,山西省,https://www.yuncheng.gov.cn/,-,,,,
 140900,忻州市,山西省,,-,,,,
