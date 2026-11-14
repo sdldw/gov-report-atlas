@@ -19,10 +19,12 @@
 | **转译结构位移** | 与「产业」共现率 0.73→0.61，与「人才」0.05→0.14 |
 | **未见空心化** | 至少绑定一项具体政策工具的比例稳定在 0.63–0.73 |
 | **注意力挤占** | 「双碳」份额由 2022 年 0.283 降至 2025 年 0.065 |
+| **说法趋同、做法分化** | 整句复制率 <0.2%，但概念句与中央文本的片段重合率 15.7%→27.2% |
 
 ![注意力趋势](docs/figs/fig1_attention_trend.png)
 ![转译结构](docs/figs/fig2_translation.png)
 ![扩散曲线](docs/figs/fig3_diffusion.png)
+![话语借用](docs/figs/fig4_copy.png)
 
 完整报告见 [`docs/report.md`](docs/report.md)，答辩准备见 [`docs/defense.md`](docs/defense.md)。
 

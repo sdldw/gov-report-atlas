@@ -1,19 +1,19 @@
-"""Copy rate: how much of a provincial report is lifted from the central one?
+"""How much of a provincial report comes from the central one?
 
-Method
-------
-1. Split the central reports (2024-2026) into sentences; precompute shingles.
-2. Build a 4x16-bit simhash banding index over them.
-3. For each provincial sentence, collect candidates sharing a band, keep those
-   with Hamming distance <= max-distance, then verify with 3-gram Jaccard.
-4. Copy rate = matched sentences / eligible sentences.
+Two measures, because they answer different questions:
 
-Boilerplate (salutations, procedural formulae) is filtered out first: it is
-technically copied by everyone and would swamp the signal.
+* **copy_rate** (sentence level): share of provincial sentences that are
+  near-verbatim copies of a central sentence (simhash <= 3 bits, 3-gram
+  Jaccard >= 0.7). Strict: catches whole-sentence lifting.
+* **gram8** (phrase level): share of a document's character 8-grams that also
+  occur in the central reports. Loose: catches borrowed phrasing.
+
+gram8 is reported twice: over the whole document, and restricted to sentences
+containing the concept. The contrast between the two is the interesting part.
 
 Usage:
     python scripts/copyrate.py
-    python scripts/copyrate.py --limit-docs 20      # quick sanity check
+    python scripts/copyrate.py --limit-docs 20
 """
 from __future__ import annotations
 
@@ -31,10 +31,12 @@ CENTRAL_DIR = ROOT / "data" / "raw" / "central"
 TEXT_DIR = ROOT / "data" / "interim" / "text"
 OUT = ROOT / "data" / "processed" / "copyrate.csv"
 
+CONCEPT = "新质生产力"
 SENT_SPLIT = re.compile(r"[。！？；\n]+")
 YEAR_RE = re.compile(r"(20\d{2})")
 MIN_LEN, MAX_LEN = 15, 200
 N_BANDS, BAND_BITS = 4, 16
+NGRAM = 8
 
 BOILERPLATE = (
     "各位代表", "请予审议", "我代表", "致以", "衷心感谢", "在此",
@@ -91,7 +93,7 @@ class CentralIndex:
         return False
 
 
-def load_central() -> CentralIndex:
+def load_central() -> tuple[CentralIndex, str]:
     if not CENTRAL_DIR.exists():
         raise SystemExit(
             f"missing {CENTRAL_DIR}\n"
@@ -103,6 +105,7 @@ def load_central() -> CentralIndex:
         raise SystemExit(f"no .pdf/.html found in {CENTRAL_DIR}")
 
     index = CentralIndex()
+    texts: list[str] = []
     for path in files:
         match = YEAR_RE.search(path.stem)
         if not match:
@@ -112,10 +115,11 @@ def load_central() -> CentralIndex:
         sents = sentences(record["text"])
         for sent in sents:
             index.add(sent)
+        texts.append(record["text"])
         print(f"central {match.group(1)}: {record['n_chars']} chars, {len(sents)} sentences")
     if not index.hashes:
         raise SystemExit("central index is empty")
-    return index
+    return index, "\n".join(texts)
 
 
 def main() -> None:
@@ -125,8 +129,9 @@ def main() -> None:
     ap.add_argument("--limit-docs", type=int, default=0)
     args = ap.parse_args()
 
-    index = load_central()
-    print(f"central sentences indexed: {len(index.hashes)}")
+    index, central_text = load_central()
+    central_grams = shingles(central_text, NGRAM)
+    print(f"central sentences indexed: {len(index.hashes)}; {NGRAM}-grams: {len(central_grams)}")
 
     paths = sorted(TEXT_DIR.glob("*.json"))
     if args.limit_docs:
@@ -136,10 +141,19 @@ def main() -> None:
     for path in paths:
         record = json.loads(path.read_text(encoding="utf-8"))
         doc_id = record["doc_id"]
-        local = sentences(record["text"])
+        text = record["text"]
+        local = sentences(text)
         if not local:
             continue
+
         matched = sum(1 for sent in local if index.match(sent, args.max_distance, args.jaccard))
+
+        doc_grams = shingles(text, NGRAM)
+        concept_sents = [s for s in SENT_SPLIT.split(text) if CONCEPT in s and len(s.strip()) >= 8]
+        concept_grams: set[str] = set()
+        for sent in concept_sents:
+            concept_grams |= shingles(sent, NGRAM)
+
         rows.append({
             "doc_id": doc_id,
             "code": doc_id[:6],
@@ -147,6 +161,9 @@ def main() -> None:
             "sentences": len(local),
             "matched": matched,
             "copy_rate": round(matched / len(local), 4),
+            "gram8_overall": round(len(doc_grams & central_grams) / max(1, len(doc_grams)), 4),
+            "concept_sentences": len(concept_sents),
+            "gram8_concept": round(len(concept_grams & central_grams) / max(1, len(concept_grams)), 4),
         })
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -156,14 +173,14 @@ def main() -> None:
         writer.writerows(rows)
 
     print(f"\nwrote {OUT} ({len(rows)} documents)")
+    print(f"{'year':<6}{'docs':>5}{'copy':>8}{'gram8':>8}{'gram8_c':>10}")
     for year in sorted({r["year"] for r in rows}):
         group = [r for r in rows if r["year"] == year]
-        mean = sum(r["copy_rate"] for r in group) / len(group)
-        print(f"  {year}: mean copy_rate={mean:.3f}  docs={len(group)}")
-
-    print("\ntop 5 by copy_rate:")
-    for row in sorted(rows, key=lambda r: -r["copy_rate"])[:5]:
-        print(f"  {row['doc_id']}  {row['copy_rate']:.3f}  ({row['matched']}/{row['sentences']})")
+        copy_mean = sum(r["copy_rate"] for r in group) / len(group)
+        gram_mean = sum(r["gram8_overall"] for r in group) / len(group)
+        with_c = [r for r in group if r["concept_sentences"] > 0]
+        gram_c = sum(r["gram8_concept"] for r in with_c) / len(with_c) if with_c else 0.0
+        print(f"{year:<6}{len(group):>5}{copy_mean:>8.3f}{gram_mean:>8.3f}{gram_c:>10.3f}")
 
 
 if __name__ == "__main__":

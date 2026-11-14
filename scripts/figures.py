@@ -23,6 +23,7 @@ from matplotlib import font_manager  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "data" / "processed" / "panel.csv"
 TRANSLATION = ROOT / "data" / "processed" / "translation_sentence.csv"
+COPYRATE = ROOT / "data" / "processed" / "copyrate.csv"
 OUT_DIR = ROOT / "docs" / "figs"
 
 PRIMARY = "新质生产力"
@@ -149,12 +150,42 @@ def fig3() -> None:
           f"intensity={[round(i, 2) for i in intensity[-3:]]}")
 
 
+def fig4() -> None:
+    rows = read_csv(COPYRATE)
+    years = sorted({int(r["year"]) for r in rows})
+    overall = []
+    concept = []
+    for year in years:
+        group = [r for r in rows if int(r["year"]) == year]
+        overall.append(sum(float(r["gram8_overall"]) for r in group) / len(group))
+        with_c = [r for r in group if int(r["concept_sentences"]) > 0]
+        concept.append(
+            sum(float(r["gram8_concept"]) for r in with_c) / len(with_c) if with_c else float("nan")
+        )
+
+    fig, ax = plt.subplots(figsize=(6.4, 3.8), dpi=200)
+    ax.plot(years, overall, marker="o", linewidth=1.8, label="全篇 8 字片段重合率")
+    ax.plot(years, concept, marker="s", linewidth=2.2, color="#d62728",
+            label="含「新质生产力」的句子")
+    ax.set_xlabel("年份")
+    ax.set_ylabel("与中央报告的 8 字片段重合率")
+    ax.set_title("话语层面的借用：整句不抄，措辞趋同")
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=8, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(OUT_DIR / "fig4_copy.png", bbox_inches="tight")
+    plt.close(fig)
+    print(f"fig4: overall={[round(v, 3) for v in overall[-3:]]} "
+          f"concept={[round(v, 3) for v in concept[-3:]]}")
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     setup_style()
     fig1()
     fig2()
     fig3()
+    fig4()
 
 
 if __name__ == "__main__":
