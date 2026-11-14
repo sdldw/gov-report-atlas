@@ -1,27 +1,31 @@
-"""Pilot: can we guess a city portal domain and find its report section?
+"""Pilot: from a guessed city domain, how far can we get toward real reports?
 
-Run on a small sample first. The hit rate decides whether 333 cities are
-feasible in the remaining weeks or whether the sample must shrink.
+Three measurements per city:
+  1. domain_hit   - did we guess a live portal whose title contains the city name?
+  2. link_hit     - did we find at least one anchor that looks like a work report?
+  3. year_hit     - how many distinct years appear in those anchors? (>=3 is usable)
+
+Paths are tried first because they are cheap; if they fail we follow the
+disclosure navigation, which is what worked for the provincial portals.
 
 Usage:
     python scripts/pilot_cities.py --sample 30
-    python scripts/pilot_cities.py --sample 30 --seed 7
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import random
+import re
 import time
 from pathlib import Path
 
-from probe_portals import find_report_links, page_title, short_name
+from probe_portals import find_report_links, nav_links, page_title, short_name
 
 ROOT = Path(__file__).resolve().parents[1]
 REGIONS = ROOT / "data" / "regions.csv"
 OUT = ROOT / "data" / "probe" / "cities_pilot.csv"
 
-# common disclosure paths on Chinese government portals
 COMMON_PATHS = [
     "/zfxxgk/zfgzbg/",
     "/zwgk/zfgzbg/",
@@ -30,9 +34,9 @@ COMMON_PATHS = [
     "/zfgzbg/",
     "/zfgb/",
 ]
-COLUMNS = ["code", "name", "province", "home", "title_ok",
-           "report_path", "n_links", "error"]
-
+YEAR_RE = re.compile(r"20\d{2}")
+COLUMNS = ["code", "name", "province", "home", "method",
+           "n_links", "n_years", "years", "sample_link"]
 
 ETHNIC = (
     "土家族|苗族|藏族|羌族|彝族|白族|傣族|景颇族|傈僳族|壮族|回族|蒙古族|朝鲜族|"
@@ -43,8 +47,6 @@ ETHNIC = (
 
 def city_stem(name: str) -> str:
     """石家庄市 -> 石家庄; 湘西土家族苗族自治州 -> 湘西; 锡林郭勒盟 -> 锡林郭勒."""
-    import re
-
     stem = re.sub(rf"(?:{ETHNIC})+", "", name)
     for suffix in ("自治州", "地区", "市", "盟"):
         if stem.endswith(suffix):
@@ -80,10 +82,40 @@ def probe_home(session, domain: str, name: str, timeout: int):
             continue
         if resp.status_code >= 400:
             continue
-        title = page_title(resp.content)
-        if short_name(name) in title:
-            return resp.url, title
-    return None, ""
+        if short_name(name) in page_title(resp.content):
+            return resp
+    return None
+
+
+def links_via_paths(session, home, timeout: int, rate: float):
+    for path in COMMON_PATHS:
+        try:
+            resp = session.get(home.url.rstrip("/") + path, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            continue
+        finally:
+            time.sleep(rate * 0.5)
+        if resp.status_code >= 400:
+            continue
+        links = find_report_links(resp.content, resp.url)
+        if links:
+            return links, path
+    return [], ""
+
+
+def links_via_nav(session, home, timeout: int, rate: float, max_pages: int = 6):
+    links: list[tuple[str, str]] = []
+    for nav in nav_links(home.content, home.url, limit=max_pages):
+        try:
+            resp = session.get(nav, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            continue
+        finally:
+            time.sleep(rate * 0.5)
+        if resp.status_code >= 400:
+            continue
+        links.extend(find_report_links(resp.content, resp.url))
+    return links
 
 
 def main() -> None:
@@ -92,7 +124,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sample", type=int, default=30)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--rate", type=float, default=1.2)
+    ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--timeout", type=int, default=15)
     args = ap.parse_args()
 
@@ -110,48 +142,54 @@ def main() -> None:
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     records = []
-    domain_hits = path_hits = 0
+    domain_hits = link_hits = year_hits = 0
 
     for row in sample:
         record = {k: "" for k in COLUMNS}
         record.update(code=row["code"], name=row["name"], province=row["province"])
 
-        home, title = None, ""
+        home = None
         for domain in domain_candidates(row["name"]):
-            home, title = probe_home(session, domain, row["name"], args.timeout)
+            home = probe_home(session, domain, row["name"], args.timeout)
             time.sleep(args.rate)
             if home:
                 break
-        record["home"] = home or ""
-        record["title_ok"] = str(bool(home)).lower()
+        record["home"] = home.url if home else ""
+        record["method"] = "-"
+
         if home:
             domain_hits += 1
-            # try the report section directly
-            for path in COMMON_PATHS:
-                try:
-                    resp = session.get(home.rstrip("/") + path, timeout=args.timeout)
-                except Exception:  # noqa: BLE001
-                    continue
-                finally:
-                    time.sleep(args.rate * 0.5)
-                if resp.status_code >= 400:
-                    continue
-                links = find_report_links(resp.content, resp.url)
+            links, path = links_via_paths(session, home, args.timeout, args.rate)
+            if links:
+                record["method"] = f"path{path}"
+            else:
+                links = links_via_nav(session, home, args.timeout, args.rate)
                 if links:
-                    record["report_path"] = path
-                    record["n_links"] = str(len(links))
-                    path_hits += 1
-                    break
+                    record["method"] = "nav"
+
+            if links:
+                link_hits += 1
+                years = sorted({m.group(0) for text, _ in links
+                                for m in [YEAR_RE.search(text)] if m})
+                record["n_links"] = str(len(links))
+                record["n_years"] = str(len(years))
+                record["years"] = "|".join(years)
+                record["sample_link"] = links[0][1]
+                if len(years) >= 3:
+                    year_hits += 1
+
         records.append(record)
-        print(f"{record['code']} {record['name']:<8} {record['title_ok']:<5} "
-              f"{record['report_path'] or '-':<24} links={record['n_links'] or '-'}")
+        print(f"{record['code']} {record['name']:<8} {record['method']:<12} "
+              f"links={record['n_links'] or '-':<3} years={record['years'] or '-'}")
 
     with open(OUT, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=COLUMNS)
         writer.writeheader()
         writer.writerows(records)
 
-    print(f"\ndomain_hit={domain_hits}/{len(sample)}  report_path_hit={path_hits}/{len(sample)}")
+    total = len(sample)
+    print(f"\ndomain_hit={domain_hits}/{total}  link_hit={link_hits}/{total}  "
+          f"year3_hit={year_hits}/{total}")
     print(f"wrote {OUT}")
 
 
