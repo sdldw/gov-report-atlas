@@ -7,10 +7,7 @@ abstract: >-
   此后注意力强度由每份 1.69 次升至 4.21 次；其绑定对象由「产业」向「平台」「人才」位移，
   而至少绑定一项具体政策工具的比例稳定在 0.63—0.73。
 authors:
-  - family-names: "待填（姓）"
-    given-names: "待填（名）"
-    # orcid: "https://orcid.org/0000-0000-0000-0000"
-    alias: "sdldw"
+  - name: "sdldw"
 repository-code: "https://github.com/sdldw/gov-report-atlas"
 url: "https://github.com/sdldw/gov-report-atlas"
 license: MIT
