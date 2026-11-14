@@ -13,5 +13,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
-      - run: ruff check src tests scripts
-      - run: pytest -q
+      - name: lint
+        run: ruff check --output-format=github src tests scripts
+      - name: test
+        run: pytest -q
