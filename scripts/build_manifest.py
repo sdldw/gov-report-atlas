@@ -22,7 +22,7 @@ import argparse
 import csv
 import re
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 from probe_portals import find_report_links
 

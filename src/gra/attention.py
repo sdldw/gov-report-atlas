@@ -31,7 +31,16 @@ def load_concepts(path: Path = CONCEPTS) -> dict:
 
 
 def count_concept(text: str, variants: list[str]) -> int:
-    return sum(text.count(v) for v in variants)
+    """Count non-overlapping matches, longest variant first.
+
+    Summing ``text.count(v)`` for each variant double-counts when one variant is
+    a substring of another (「新质生产力」inside「新质生产力发展」), so we scan once
+    with a single alternation ordered by length.
+    """
+    if not variants:
+        return 0
+    pattern = "|".join(re.escape(v) for v in sorted(variants, key=len, reverse=True))
+    return len(re.findall(pattern, text))
 
 
 def attention_share(text: str, variants: list[str], per: int = 1000) -> float:

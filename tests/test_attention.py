@@ -3,10 +3,18 @@ from gra.attention import (
     attention_share,
     cjk_count,
     copying_rate,
+    count_concept,
     hamming,
     simhash,
     split_sentences,
 )
+
+
+def test_count_concept_does_not_double_count_overlapping_variants():
+    variants = ["新质生产力", "新质生产力发展"]
+    assert count_concept("新质生产力发展", variants) == 1
+    assert count_concept("新质生产力和新质生产力发展", variants) == 2
+    assert count_concept("本句没有该词", variants) == 0
 
 
 def test_cjk_count_ignores_punctuation_and_latin():
