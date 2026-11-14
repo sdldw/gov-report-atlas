@@ -31,9 +31,15 @@ COMMON_PATHS = [
     "/zwgk/zfgzbg/",
     "/zfxxgk/zfgzbg/index.html",
     "/zwgk/zfgzbg/index.html",
+    "/xxgk/zfgzbg/",
+    "/xxgk/",
+    "/zfxxgk/",
+    "/zfxxgkpt/",
     "/zfgzbg/",
     "/zfgb/",
+    "/govopen/zfgzbg/",
 ]
+SUBDOMAIN_PREFIXES = ["xxgk.", "zfxxgk.", "govopen."]
 YEAR_RE = re.compile(r"20\d{2}")
 COLUMNS = ["code", "name", "province", "home", "method",
            "n_links", "n_years", "years", "sample_link"]
@@ -103,6 +109,25 @@ def links_via_paths(session, home, timeout: int, rate: float):
     return [], ""
 
 
+def links_via_subdomains(session, home, timeout: int, rate: float):
+    """Disclosure platforms often live on xxgk./zfxxgk./govopen. subdomains."""
+    links: list[tuple[str, str]] = []
+    if "://www." not in home.url:
+        return links
+    for prefix in SUBDOMAIN_PREFIXES:
+        url = home.url.replace("://www.", f"://{prefix}", 1).rstrip("/") + "/"
+        try:
+            resp = session.get(url, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            continue
+        finally:
+            time.sleep(rate * 0.5)
+        if resp.status_code >= 400:
+            continue
+        links.extend(find_report_links(resp.content, resp.url))
+    return links
+
+
 def links_via_nav(session, home, timeout: int, rate: float, max_pages: int = 6):
     links: list[tuple[str, str]] = []
     for nav in nav_links(home.content, home.url, limit=max_pages):
@@ -163,9 +188,13 @@ def main() -> None:
             if links:
                 record["method"] = f"path{path}"
             else:
-                links = links_via_nav(session, home, args.timeout, args.rate)
+                links = links_via_subdomains(session, home, args.timeout, args.rate)
                 if links:
-                    record["method"] = "nav"
+                    record["method"] = "subdomain"
+                else:
+                    links = links_via_nav(session, home, args.timeout, args.rate)
+                    if links:
+                        record["method"] = "nav"
 
             if links:
                 link_hits += 1

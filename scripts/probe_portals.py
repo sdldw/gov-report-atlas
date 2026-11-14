@@ -68,12 +68,19 @@ def find_report_links(html: bytes, base_url: str) -> list[tuple[str, str]]:
     return out
 
 
+def _registrable(netloc: str) -> str:
+    """www.a.gov.cn and xxgk.a.gov.cn are the same site; a.gov.cn is not b.gov.cn."""
+    host = netloc.split(":")[0]
+    parts = host.split(".")
+    return ".".join(parts[-3:]) if len(parts) >= 3 else host
+
+
 def nav_links(html: bytes, base_url: str, limit: int = 8) -> list[str]:
-    """Candidate disclosure-section pages, same host only."""
+    """Candidate disclosure-section pages, same registrable domain only."""
     from lxml import html as LH
 
     doc = LH.fromstring(_decode(html))
-    host = urlparse(base_url).netloc
+    base_site = _registrable(urlparse(base_url).netloc)
     out: list[str] = []
     seen: set[str] = set()
     for anchor in doc.xpath("//a[@href]"):
@@ -86,7 +93,7 @@ def nav_links(html: bytes, base_url: str, limit: int = 8) -> list[str]:
         if not (NAV_RE.search(text) or HREF_RE.search(href)):
             continue
         absolute = urljoin(base_url, href)
-        if urlparse(absolute).netloc != host or absolute in seen:
+        if _registrable(urlparse(absolute).netloc) != base_site or absolute in seen:
             continue
         seen.add(absolute)
         out.append(absolute)
