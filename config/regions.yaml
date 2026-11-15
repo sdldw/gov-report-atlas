@@ -15,8 +15,8 @@ years:
 
 scope:
   level: province            # 仅省级行政区
-  provinces: 14              # 实际取得数据的省份
-  documents: 129             # 政府工作报告份数
+  provinces: 18              # 实际取得数据的省份
+  documents: 150             # 政府工作报告份数
   central_reports: 3         # 2024—2026 国务院政府工作报告，用于第 5 节复制率对照
   balanced_panel: "8 省 × 12 年 = 96 份"   # 趋势分析所用子样本
 

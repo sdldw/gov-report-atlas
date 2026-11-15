@@ -17,8 +17,8 @@ def test_regions_yaml_describes_executed_scope():
     data = yaml.safe_load((ROOT / "config" / "regions.yaml").read_text(encoding="utf-8"))
     assert data["years"] == {"from": 2015, "to": 2026}
     assert data["scope"]["level"] == "province"
-    assert data["scope"]["provinces"] == 14
-    assert data["scope"]["documents"] == 129
+    assert data["scope"]["provinces"] == 18
+    assert data["scope"]["documents"] == 150
 
 
 def test_manifest_matches_declared_scope():
