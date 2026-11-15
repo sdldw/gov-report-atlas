@@ -112,6 +112,40 @@ def fetch_years(session, url: str, timeout: int) -> dict[int, str]:
     return found
 
 
+def merge_rendered(manifest_path: Path, rendered: Path) -> None:
+    """Replace the rows of every province covered by rendered_links.csv.
+
+    The rendered links come from pages the static fetcher cannot read, so they
+    are authoritative for those provinces; everything else is left untouched.
+    """
+    with open(rendered, encoding="utf-8") as fh:
+        links = list(csv.DictReader(fh))
+    covered = {r["code"] for r in links}
+
+    existing: list[dict] = []
+    if manifest_path.exists():
+        with open(manifest_path, encoding="utf-8") as fh:
+            existing = [r for r in csv.DictReader(fh) if r["code"] not in covered]
+
+    by_id = {r["doc_id"]: r for r in existing}
+    for row in links:
+        doc_id = f"{row['code']}_{row['year']}"
+        by_id[doc_id] = {
+            "doc_id": doc_id, "code": row["code"], "name": row["name"],
+            "level": "province", "year": row["year"], "kind": "work_report",
+            "url": row["url"], "path": "", "sha256": "", "bytes": "",
+            "status": "pending", "http_code": "", "fetched_at": "",
+        }
+
+    rows = sorted(by_id.values(), key=lambda r: (r["code"], r["year"]))
+    with open(manifest_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"merged {len(covered)} rendered provinces, {len(links)} links")
+    print(f"documents={len(rows)}")
+
+
 def main() -> None:
     import requests
     import yaml
@@ -121,7 +155,13 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=MANIFEST)
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--timeout", type=int, default=20)
+    ap.add_argument("--rendered", type=Path, default=None,
+                    help="offline: merge links captured from rendered pages")
     args = ap.parse_args()
+
+    if args.rendered:
+        merge_rendered(args.out, args.rendered)
+        return
 
     with open(args.probe, encoding="utf-8") as fh:
         probes = list(csv.DictReader(fh))
