@@ -138,7 +138,10 @@ def crawl(page, start: str, timeout: int, dump: Path | None = None):
             safe = re.sub(r"[^\w]+", "_", url)[:80]
             (dump / f"{safe}.html").write_bytes(html)
 
-        links.extend(find_report_links(html, page.url))
+        page_links = find_report_links(html, page.url)
+        links.extend(page_links)
+        for year, target in years_from(page_links).items():
+            years.setdefault(year, target)
         found = year_entries(html, page.url)
         if found and archive == "":
             archive = page.url
