@@ -117,6 +117,7 @@ def crawl(page, start: str, timeout: int, dump: Path | None = None):
     queue: list[tuple[str, int]] = [(start, 0)]
     links: list[tuple[str, str]] = []
     years: dict[int, str] = {}
+    archive = ""
     pages = 0
     home = start
 
@@ -138,7 +139,10 @@ def crawl(page, start: str, timeout: int, dump: Path | None = None):
             (dump / f"{safe}.html").write_bytes(html)
 
         links.extend(find_report_links(html, page.url))
-        for year, target in year_entries(html, page.url).items():
+        found = year_entries(html, page.url)
+        if found and archive == "":
+            archive = page.url
+        for year, target in found.items():
             years.setdefault(year, target)
 
         if len(years) >= 3:
@@ -147,7 +151,7 @@ def crawl(page, start: str, timeout: int, dump: Path | None = None):
             for cand in section_links(html, page.url):
                 if cand not in seen:
                     queue.append((cand, depth + 1))
-    return links, years, pages, home
+    return links, years, archive, pages, home
 
 
 def main() -> None:
@@ -186,13 +190,13 @@ def main() -> None:
             home = f"https://{item['domain']}/"
             try:
                 dump = (DUMP_DIR / item["code"]) if args.dump else None
-                links, years, pages, final_home = crawl(page, home, args.timeout, dump)
+                links, years, archive, pages, final_home = crawl(page, home, args.timeout, dump)
                 record.update(
                     home=final_home,
                     n_links=str(len(links)),
                     n_years=str(len(years)),
                     years="|".join(str(y) for y in sorted(years)),
-                    archive=next(iter(years.values())) if years else "",
+                    archive=archive,
                 )
                 record["error"] = f"pages={pages}" if pages else ""
             except Exception as exc:  # noqa: BLE001
