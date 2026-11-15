@@ -1,13 +1,15 @@
 """Render JavaScript-heavy portals with a headless browser.
 
 Seventeen provincial portals publish their work-report archives through JS, so
-static requests see an empty shell. This script drives Chromium, waits for the
-page to settle, and then reuses the same extraction logic as the static probe.
+static requests see an empty shell. This script drives Chromium and does a small
+breadth-first crawl: from the homepage it follows links that look like a
+disclosure section, at most two levels deep, until enough year-tagged report
+links are collected.
 
 Usage:
-    python scripts/render_portals.py --codes 440000,320000,330000
+    python scripts/render_portals.py --codes 440000 --dump
     python scripts/render_portals.py --all --rate 2
-    python scripts/render_portals.py --all --merge      # write back into portals.csv
+    python scripts/render_portals.py --all --merge
 """
 from __future__ import annotations
 
@@ -16,38 +18,108 @@ import csv
 import re
 import time
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
-from probe_portals import find_report_links, nav_links
+from probe_portals import find_report_links
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = ROOT / "config" / "portals_seed.yaml"
 PROBE = ROOT / "data" / "probe" / "portals.csv"
 OUT = ROOT / "data" / "probe" / "rendered.csv"
+DUMP_DIR = ROOT / "data" / "probe" / "dump"
 
 COLUMNS = ["code", "name", "home", "archive", "n_links", "n_years", "years", "error"]
-MAX_NAV = 6
-DUMP_DIR = ROOT / "data" / "probe" / "dump"
+MAX_DEPTH = 2
+MAX_PAGES = 8
+SECTION_RE = re.compile(r"(zfgzbg|zfgb|gzbg|工作报告|xxgk|govopen)", re.IGNORECASE)
+YEAR_TEXT = re.compile(r"(20\d{2})\s*年")
+YEAR_URL = re.compile(r"/(20\d{2})[/_\-]")
 
 
 def render(page, url: str, timeout: int) -> bytes:
     page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-    page.wait_for_timeout(1500)  # let async content land
+    page.wait_for_timeout(1200)
     return page.content().encode("utf-8")
 
 
 def years_from(links: list[tuple[str, str]]) -> dict[int, str]:
-    import re
-
     out: dict[int, str] = {}
     for text, url in links:
-        match = re.search(r"(20\d{2})\s*年", text)
+        match = YEAR_TEXT.search(text)
         year = int(match.group(1)) if match else None
         if year is None:
-            match = re.search(r"/(20\d{2})[/_\-]", url)
+            match = YEAR_URL.search(url)
             year = int(match.group(1)) if match else None
         if year is not None and 2015 <= year <= 2026:
             out.setdefault(year, url)
     return out
+
+
+def registrable(url: str) -> str:
+    host = urlparse(url).netloc.split(":")[0]
+    parts = host.split(".")
+    return ".".join(parts[-3:]) if len(parts) >= 3 else host
+
+
+def section_links(html: bytes, base_url: str, limit: int = 4) -> list[str]:
+    from lxml import html as LH
+
+    try:
+        doc = LH.fromstring(html.decode("utf-8", "ignore"))
+    except Exception:  # noqa: BLE001
+        return []
+    site = registrable(base_url)
+    out: list[str] = []
+    seen: set[str] = set()
+    for anchor in doc.xpath("//a[@href]"):
+        href = (anchor.get("href") or "").strip()
+        if not href or href.lower().startswith(("javascript:", "#", "mailto:")):
+            continue
+        absolute = urljoin(base_url, href)
+        if registrable(absolute) != site or absolute in seen:
+            continue
+        text = "".join(anchor.itertext()).strip()
+        if SECTION_RE.search(href) or "工作报告" in text:
+            seen.add(absolute)
+            out.append(absolute)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def crawl(page, start: str, timeout: int, dump: Path | None = None):
+    """Breadth-first from ``start``; returns (links, pages, final_home)."""
+    seen: set[str] = set()
+    queue: list[tuple[str, int]] = [(start, 0)]
+    links: list[tuple[str, str]] = []
+    pages = 0
+    home = start
+
+    while queue and pages < MAX_PAGES:
+        url, depth = queue.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        try:
+            html = render(page, url, timeout)
+        except Exception:  # noqa: BLE001
+            continue
+        pages += 1
+        if pages == 1:
+            home = page.url
+        if dump is not None:
+            dump.mkdir(parents=True, exist_ok=True)
+            safe = re.sub(r"[^\w]+", "_", url)[:80]
+            (dump / f"{safe}.html").write_bytes(html)
+
+        links.extend(find_report_links(html, page.url))
+        if len(years_from(links)) >= 3:
+            break
+        if depth < MAX_DEPTH:
+            for cand in section_links(html, page.url):
+                if cand not in seen:
+                    queue.append((cand, depth + 1))
+    return links, pages, home
 
 
 def main() -> None:
@@ -55,12 +127,12 @@ def main() -> None:
     from playwright.sync_api import sync_playwright
 
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--codes", default="", help="comma-separated codes, e.g. 440000,320000")
-    ap.add_argument("--all", action="store_true", help="every province in the seed")
+    ap.add_argument("--codes", default="")
+    ap.add_argument("--all", action="store_true")
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--timeout", type=int, default=30000)
-    ap.add_argument("--merge", action="store_true", help="write archive URLs into portals.csv")
-    ap.add_argument("--dump", action="store_true", help="save rendered html for inspection")
+    ap.add_argument("--merge", action="store_true")
+    ap.add_argument("--dump", action="store_true")
     args = ap.parse_args()
 
     seed = yaml.safe_load(SEED.read_text(encoding="utf-8"))["portals"]
@@ -85,49 +157,17 @@ def main() -> None:
             record.update(code=item["code"], name=item["name"])
             home = f"https://{item['domain']}/"
             try:
-                html = render(page, home, args.timeout)
-                record["home"] = page.url
-                if args.dump:
-                    DUMP_DIR.mkdir(parents=True, exist_ok=True)
-                    (DUMP_DIR / f"{item['code']}_home.html").write_bytes(html)
-                links = find_report_links(html, page.url)
-
-                # The homepage usually gives one entry ("政府工作报告") and the
-                # years live one level down. Follow the entry before giving up.
-                if links and not years_from(links):
-                    for _text, entry in links[:3]:
-                        try:
-                            sub = render(page, entry, args.timeout)
-                        except Exception:  # noqa: BLE001
-                            continue
-                        if args.dump:
-                            DUMP_DIR.mkdir(parents=True, exist_ok=True)
-                            safe = re.sub(r"[^\w]+", "_", entry)[:80]
-                            (DUMP_DIR / f"{item['code']}_entry_{safe}.html").write_bytes(sub)
-                        links.extend(find_report_links(sub, entry))
-                        if len(years_from(links)) >= 3:
-                            break
-
-                if not links:
-                    for nav in nav_links(html, page.url, limit=MAX_NAV):
-                        try:
-                            sub = render(page, nav, args.timeout)
-                        except Exception:  # noqa: BLE001
-                            continue
-                        if args.dump:
-                            DUMP_DIR.mkdir(parents=True, exist_ok=True)
-                            safe = re.sub(r"[^\w]+", "_", nav)[:80]
-                            (DUMP_DIR / f"{item['code']}_nav_{safe}.html").write_bytes(sub)
-                        links.extend(find_report_links(sub, page.url))
-                        if len(years_from(links)) >= 5:
-                            break
+                dump = (DUMP_DIR / item["code"]) if args.dump else None
+                links, pages, final_home = crawl(page, home, args.timeout, dump)
                 years = years_from(links)
                 record.update(
+                    home=final_home,
                     n_links=str(len(links)),
                     n_years=str(len(years)),
                     years="|".join(str(y) for y in sorted(years)),
                     archive=next(iter(years.values())) if years else "",
                 )
+                record["error"] = f"pages={pages}" if pages else ""
             except Exception as exc:  # noqa: BLE001
                 record["error"] = f"{type(exc).__name__}: {exc}"[:100]
             rows.append(record)
