@@ -142,7 +142,7 @@ def fig3() -> None:
     handles = ax.get_legend_handles_labels()[0] + ax2.get_legend_handles_labels()[0]
     ax.legend(handles, [h.get_label() for h in handles],
               frameon=False, fontsize=8, loc="upper left")
-    ax.set_title("扩散：覆盖率一年饱和，强度持续上升")
+    ax.set_title("扩散：覆盖率迅速逼近上限，强度持续上升")
     fig.tight_layout()
     fig.savefig(OUT_DIR / "fig3_diffusion.png", bbox_inches="tight")
     plt.close(fig)
