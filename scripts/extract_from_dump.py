@@ -13,6 +13,7 @@ Usage:  python scripts/extract_from_dump.py
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 from probe_portals import find_report_links
@@ -24,36 +25,60 @@ OUT = ROOT / "data" / "probe" / "rendered_links.csv"
 SEED = ROOT / "config" / "portals_seed.yaml"
 
 
-def base_from_name(stem: str) -> str:
-    """'https_www_gd_gov_cn_zwgk_zfgzbg_index_html' -> 'https://www.gd.gov.cn/...'."""
-    if "_" not in stem:
+def base_from_name(stem: str, domain: str) -> str:
+    """Rebuild the page URL from its sanitised filename.
+
+    Both '.' and '/' were replaced by '_' when the file was saved, so the dots
+    cannot be recovered by splitting. We anchor on the known domain instead:
+    'http_www_shanxi_gov_cn_szf_zfgzbg_' -> 'http://www.shanxi.gov.cn/szf/zfgzbg/'.
+    """
+    key = domain.replace(".", "_")
+    idx = stem.find(key)
+    if idx < 0:
         return ""
-    scheme, rest = stem.split("_", 1)
+    scheme = stem[:idx].rstrip("_")
     if scheme not in ("http", "https"):
         return ""
-    return f"{scheme}://" + rest.replace("_", "/")
+    rest = stem[idx + len(key):]
+    trailing = "/" if rest.endswith("_") else ""
+    path = rest.strip("_").replace("_", "/")
+    path = re.sub(r"/(s?html?|pdf)$", r".\1", path)  # 'index_shtml' -> 'index.shtml'
+    base = f"{scheme}://{domain}/{path}"
+    return base.rstrip("/") + "/" if trailing else base
+
+
+def valid(url: str) -> bool:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return parsed.scheme in ("http", "https") and "." in parsed.netloc
 
 
 def main() -> None:
     import yaml
 
-    names = {p["code"]: p["name"]
-             for p in yaml.safe_load(SEED.read_text(encoding="utf-8"))["portals"]}
+    seed = yaml.safe_load(SEED.read_text(encoding="utf-8"))["portals"]
+    names = {p["code"]: p["name"] for p in seed}
+    domains = {p["code"]: p["domain"] for p in seed}
 
     rows = []
     for code_dir in sorted(p for p in DUMP.iterdir() if p.is_dir()):
         code = code_dir.name
+        fallback = f"https://{domains[code]}/" if code in domains else ""
         best: dict[int, str] = {}
         best_page = ""
         for page in sorted(code_dir.glob("*.html")):
-            base = base_from_name(page.stem)
+            base = base_from_name(page.stem, domains.get(code, "")) or fallback
             if not base:
                 continue
             raw = page.read_bytes()
             found: dict[int, str] = {}
             for year, url in year_entries(raw, base).items():
-                found.setdefault(year, url)
+                if valid(url):
+                    found.setdefault(year, url)
             for text, url in find_report_links(raw, base):
+                if not valid(url):
+                    continue
                 for year, target in years_from([(text, url)]).items():
                     found.setdefault(year, target)
             if len(found) > len(best):

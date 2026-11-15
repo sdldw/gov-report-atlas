@@ -112,22 +112,32 @@ def fetch_years(session, url: str, timeout: int) -> dict[int, str]:
     return found
 
 
-def merge_rendered(manifest_path: Path, rendered: Path) -> None:
-    """Replace the rows of every province covered by rendered_links.csv.
+def merge_rendered(manifest_path: Path, rendered: Path, only_new: bool = False) -> None:
+    """Merge links captured from rendered pages into the manifest.
 
     The rendered links come from pages the static fetcher cannot read, so they
-    are authoritative for those provinces; everything else is left untouched.
+    are authoritative for those provinces. With ``only_new`` we instead keep the
+    existing rows untouched and add merely the provinces not yet present — the
+    conservative option when the existing corpus is already validated.
     """
     with open(rendered, encoding="utf-8") as fh:
-        links = list(csv.DictReader(fh))
+        links = [r for r in csv.DictReader(fh)
+                 if r["url"].startswith(("http://", "https://"))]
     covered = {r["code"] for r in links}
 
     existing: list[dict] = []
     if manifest_path.exists():
         with open(manifest_path, encoding="utf-8") as fh:
-            existing = [r for r in csv.DictReader(fh) if r["code"] not in covered]
+            existing = list(csv.DictReader(fh))
+    have = {r["code"] for r in existing}
 
-    by_id = {r["doc_id"]: r for r in existing}
+    if only_new:
+        links = [r for r in links if r["code"] not in have]
+        kept = existing
+    else:
+        kept = [r for r in existing if r["code"] not in covered]
+
+    by_id = {r["doc_id"]: r for r in kept}
     for row in links:
         doc_id = f"{row['code']}_{row['year']}"
         by_id[doc_id] = {
@@ -142,7 +152,7 @@ def merge_rendered(manifest_path: Path, rendered: Path) -> None:
         writer = csv.DictWriter(fh, fieldnames=COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
-    print(f"merged {len(covered)} rendered provinces, {len(links)} links")
+    print(f"kept={len(kept)} added={len(links)} provinces_added={len({r['code'] for r in links})}")
     print(f"documents={len(rows)}")
 
 
@@ -157,10 +167,12 @@ def main() -> None:
     ap.add_argument("--timeout", type=int, default=20)
     ap.add_argument("--rendered", type=Path, default=None,
                     help="offline: merge links captured from rendered pages")
+    ap.add_argument("--only-new", action="store_true",
+                    help="with --rendered, add only provinces not already present")
     args = ap.parse_args()
 
     if args.rendered:
-        merge_rendered(args.out, args.rendered)
+        merge_rendered(args.out, args.rendered, only_new=args.only_new)
         return
 
     with open(args.probe, encoding="utf-8") as fh:
