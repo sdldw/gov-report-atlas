@@ -91,6 +91,23 @@ def main() -> None:
                     DUMP_DIR.mkdir(parents=True, exist_ok=True)
                     (DUMP_DIR / f"{item['code']}_home.html").write_bytes(html)
                 links = find_report_links(html, page.url)
+
+                # The homepage usually gives one entry ("政府工作报告") and the
+                # years live one level down. Follow the entry before giving up.
+                if links and not years_from(links):
+                    for _text, entry in links[:3]:
+                        try:
+                            sub = render(page, entry, args.timeout)
+                        except Exception:  # noqa: BLE001
+                            continue
+                        if args.dump:
+                            DUMP_DIR.mkdir(parents=True, exist_ok=True)
+                            safe = re.sub(r"[^\w]+", "_", entry)[:80]
+                            (DUMP_DIR / f"{item['code']}_entry_{safe}.html").write_bytes(sub)
+                        links.extend(find_report_links(sub, entry))
+                        if len(years_from(links)) >= 3:
+                            break
+
                 if not links:
                     for nav in nav_links(html, page.url, limit=MAX_NAV):
                         try:
