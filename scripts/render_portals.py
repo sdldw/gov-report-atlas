@@ -55,6 +55,30 @@ def years_from(links: list[tuple[str, str]]) -> dict[int, str]:
     return out
 
 
+def year_entries(html: bytes, base_url: str) -> dict[int, str]:
+    """Archive pages often list entries as bare "2025年" anchors.
+
+    find_report_links requires the phrase 政府工作报告, so those entries are
+    invisible to it; this picks them up by shape instead.
+    """
+    from lxml import html as LH
+
+    try:
+        doc = LH.fromstring(html.decode("utf-8", "ignore"))
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict[int, str] = {}
+    for anchor in doc.xpath("//a[@href]"):
+        text = "".join(anchor.itertext()).strip()
+        match = re.fullmatch(r"(20\d{2})\s*年(度)?", text)
+        if not match:
+            continue
+        year = int(match.group(1))
+        if 2015 <= year <= 2026:
+            out.setdefault(year, urljoin(base_url, anchor.get("href")))
+    return out
+
+
 def registrable(url: str) -> str:
     host = urlparse(url).netloc.split(":")[0]
     parts = host.split(".")
@@ -88,10 +112,11 @@ def section_links(html: bytes, base_url: str, limit: int = 4) -> list[str]:
 
 
 def crawl(page, start: str, timeout: int, dump: Path | None = None):
-    """Breadth-first from ``start``; returns (links, pages, final_home)."""
+    """Breadth-first from ``start``; returns (links, years, pages, final_home)."""
     seen: set[str] = set()
     queue: list[tuple[str, int]] = [(start, 0)]
     links: list[tuple[str, str]] = []
+    years: dict[int, str] = {}
     pages = 0
     home = start
 
@@ -113,13 +138,16 @@ def crawl(page, start: str, timeout: int, dump: Path | None = None):
             (dump / f"{safe}.html").write_bytes(html)
 
         links.extend(find_report_links(html, page.url))
-        if len(years_from(links)) >= 3:
+        for year, target in year_entries(html, page.url).items():
+            years.setdefault(year, target)
+
+        if len(years) >= 3:
             break
         if depth < MAX_DEPTH:
             for cand in section_links(html, page.url):
                 if cand not in seen:
                     queue.append((cand, depth + 1))
-    return links, pages, home
+    return links, years, pages, home
 
 
 def main() -> None:
@@ -158,8 +186,7 @@ def main() -> None:
             home = f"https://{item['domain']}/"
             try:
                 dump = (DUMP_DIR / item["code"]) if args.dump else None
-                links, pages, final_home = crawl(page, home, args.timeout, dump)
-                years = years_from(links)
+                links, years, pages, final_home = crawl(page, home, args.timeout, dump)
                 record.update(
                     home=final_home,
                     n_links=str(len(links)),
