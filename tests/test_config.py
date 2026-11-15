@@ -13,11 +13,21 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_regions_yaml_loads():
+def test_regions_yaml_describes_executed_scope():
     data = yaml.safe_load((ROOT / "config" / "regions.yaml").read_text(encoding="utf-8"))
-    assert data["years"] == [2023, 2024, 2025, 2026]
-    assert "work_report" in data["doc_type"]
-    assert data["goal"]["prefecture"] == 333 * len(data["years"])
+    assert data["years"] == {"from": 2015, "to": 2026}
+    assert data["scope"]["level"] == "province"
+    assert data["scope"]["provinces"] == 14
+    assert data["scope"]["documents"] == 129
+
+
+def test_manifest_matches_declared_scope():
+    data = yaml.safe_load((ROOT / "config" / "regions.yaml").read_text(encoding="utf-8"))
+    with open(ROOT / "data" / "manifest.csv", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    assert len(rows) == data["scope"]["documents"], "manifest drifted from declared scope"
+    assert len({r["code"] for r in rows}) == data["scope"]["provinces"]
+    assert all(r["url"].startswith(("http://", "https://")) for r in rows)
 
 
 def test_concepts_yaml_shape():
